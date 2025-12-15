@@ -9,6 +9,7 @@ class TipoToken(Enum):
     PARENTESE_ESQUERDO = "ParEsq"
     PARENTESE_DIREITO = "ParDir"
     COMENTARIO = "Coment"
+    ERROR = "Error"
 
 def tipo_token(strings):
     if strings.isdigit():
@@ -30,7 +31,7 @@ def tipo_token(strings):
     elif strings.startswith("#"):
         return TipoToken.COMENTARIO
     else:
-        return None
+        return TipoToken.ERROR
 
 
 class Token:
