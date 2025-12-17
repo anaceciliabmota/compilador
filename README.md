@@ -5,7 +5,7 @@ Este repositório categoriza em tokens a entrada de arquivos na linguagem EC1. O
 Para executar:
 
 ```
-python3 main.pt <arquivo_de_entrada>
+python3 main.py <arquivo_de_entrada>
 ```
 
 O programa deve retornar os tokens contidos no arquivo
