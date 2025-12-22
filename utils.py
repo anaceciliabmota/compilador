@@ -11,6 +11,13 @@ class TipoToken(Enum):
     PARENTESE_DIREITO = "ParDir"
     COMENTARIO = "Coment"
     ERROR = "Error"
+    EOF = "EOF"
+
+class ErroSintatico(Exception):
+    def __init__(self, mensagem, posicao=None):
+        self.mensagem = mensagem
+        self.posicao = posicao
+        super().__init__(self.mensagem)
 
 class Token:
     def __init__(self, tipo: TipoToken, lexema, posicao):
@@ -76,9 +83,17 @@ def scan_tokens(conteudo):
         tokens.append(token)
         pos += 1
     
+    # token EOF para parsing
+    if tokens:
+        eof_pos = tokens[-1].posicao + len(tokens[-1].lexema)
+    else:
+        eof_pos = 0
+    tokens.append(Token(TipoToken.EOF, '', eof_pos))
+    
     return tokens
 
 def find_errors(tokens):
+    """léxicos"""
     erros = [token for token in tokens if token.tipo == TipoToken.ERROR]
     
     if erros:
@@ -89,18 +104,47 @@ def find_errors(tokens):
     
     return False
 
+def validar_parenteses(tokens):
+    contador = 0
+    posicoes_abertura = []
+    
+    for token in tokens:
+        if token.tipo == TipoToken.PARENTESE_ESQUERDO:
+            contador += 1
+            posicoes_abertura.append(token.posicao)
+        elif token.tipo == TipoToken.PARENTESE_DIREITO:
+            contador -= 1
+            if contador < 0:
+                raise ErroSintatico(
+                    f"Parêntese direito sem correspondente na posição {token.posicao}",
+                    token.posicao
+                )
+    
+    if contador > 0:
+        raise ErroSintatico(
+            f"Parêntese esquerdo sem fechamento na posição {posicoes_abertura[-1]}",
+            posicoes_abertura[-1]
+        )
+    
+    return True
+
 def analisa_operador(tokens, pos):
+    if pos >= len(tokens):
+        raise ErroSintatico(
+            "Esperado operador, mas fim da entrada alcançado",
+            tokens[-1].posicao if tokens else 0
+        )
+    
     token = tokens[pos]
-    if token.tipo == TipoToken.SOMA:
-        return (TipoToken.SOMA, pos)
-    elif token.tipo == TipoToken.SUBTRACAO:
-        return (TipoToken.SUBTRACAO, pos)
-    elif token.tipo == TipoToken.MULTIPLICACAO:
-        return (TipoToken.MULTIPLICACAO, pos)
-    elif token.tipo == TipoToken.DIVISAO:
-        return (TipoToken.DIVISAO, pos)
+    
+    if token.tipo in [TipoToken.SOMA, TipoToken.SUBTRACAO, 
+                      TipoToken.MULTIPLICACAO, TipoToken.DIVISAO]:
+        return (token.tipo, pos)
     else:
-        raise ValueError(f"Operador inválido: {token}")
+        raise ErroSintatico(
+            f"Esperado operador (+, -, *, /), mas encontrado '{token.lexema}' na posição {token.posicao}",
+            token.posicao
+        )
 
 
 class Exp:
@@ -132,7 +176,9 @@ class OpBin(Exp):
         elif self.operador == TipoToken.MULTIPLICACAO:
             return esq * dir
         elif self.operador == TipoToken.DIVISAO:
-            return esq / dir
+            if dir == 0:
+                raise ZeroDivisionError("Divisão por zero")
+            return esq // dir
         else:
             raise ValueError(f"Operador inválido: {self.operador}")
 
@@ -142,24 +188,77 @@ class OpBin(Exp):
 
 def analisa_parenteses(tokens, pos, operador, op_esquerdo, op_direito):
     if pos >= len(tokens):
-        sys.exit(f"Falta fechar o parentese direito")
-    elif tokens[pos].tipo == TipoToken.PARENTESE_DIREITO:
+        raise ErroSintatico(
+            "Esperado parêntese direito ')' mas fim da entrada alcançado",
+            tokens[-1].posicao if tokens else 0
+        )
+    
+    token = tokens[pos]
+    
+    if token.tipo == TipoToken.PARENTESE_DIREITO:
         return OpBin(operador, op_esquerdo, op_direito), pos
+    elif token.tipo == TipoToken.EOF:
+        raise ErroSintatico(
+            "Esperado parêntese direito ')' mas fim da entrada alcançado",
+            token.posicao
+        )
     else:
-        sys.exit(f"Token inválido: {tokens[pos]}")
+        raise ErroSintatico(
+            f"Esperado parêntese direito ')' mas encontrado '{token.lexema}' na posição {token.posicao}",
+            token.posicao
+        )
 
 
 def analisa_exp(tokens, pos):
-    if tokens[pos].tipo == TipoToken.NUMERO:
-        return Const(tokens[pos].lexema), pos 
-    elif tokens[pos].tipo == TipoToken.PARENTESE_ESQUERDO:
+    if pos >= len(tokens):
+        raise ErroSintatico(
+            "Esperado expressão, mas fim da entrada alcançado",
+            tokens[-1].posicao if tokens else 0
+        )
+    
+    token = tokens[pos]
+    
+    if token.tipo == TipoToken.NUMERO:
+        return Const(token.lexema), pos
+    
+    elif token.tipo == TipoToken.PARENTESE_ESQUERDO:
+        # Analisa operando esquerdo
         op_esquerdo, pos = analisa_exp(tokens, pos + 1)
-        operador, pos = analisa_operador(tokens, pos + 1)   
+        
+        operador, pos = analisa_operador(tokens, pos + 1)
+        
+        # Analisa operando direito
         op_direito, pos = analisa_exp(tokens, pos + 1)
+        
+        # Valida fechamento do parêntese
         return analisa_parenteses(tokens, pos + 1, operador, op_esquerdo, op_direito)
-
+    
+    elif token.tipo == TipoToken.PARENTESE_DIREITO:
+        raise ErroSintatico(
+            f"Parêntese direito inesperado na posição {token.posicao}",
+            token.posicao
+        )
+    elif token.tipo in [TipoToken.SOMA, TipoToken.SUBTRACAO, 
+                        TipoToken.MULTIPLICACAO, TipoToken.DIVISAO]:
+        raise ErroSintatico(
+            f"Operador '{token.lexema}' inesperado na posição {token.posicao}. Expressão deve começar com número ou parêntese esquerdo",
+            token.posicao
+        )
+    elif token.tipo == TipoToken.COMENTARIO:
+        raise ErroSintatico(
+            f"Comentário inesperado na posição {token.posicao}",
+            token.posicao
+        )
+    elif token.tipo == TipoToken.EOF:
+        raise ErroSintatico(
+            "Expressão vazia ou incompleta",
+            token.posicao
+        )
     else:
-        raise ValueError(f"Token inválido: {tokens[pos]}")
+        raise ErroSintatico(
+            f"Token inválido '{token.lexema}' na posição {token.posicao}",
+            token.posicao
+        )
    
 
 
