@@ -1,4 +1,5 @@
 from enum import Enum
+import sys
 
 class TipoToken(Enum):
     NUMERO = "Numero"
@@ -139,6 +140,15 @@ class OpBin(Exp):
         return f"OpBin({self.esquerda}, {self.operador.value}, {self.direita})"
 
 
+def analisa_parenteses(tokens, pos, operador, op_esquerdo, op_direito):
+    if pos >= len(tokens):
+        sys.exit(f"Falta fechar o parentese direito")
+    elif tokens[pos].tipo == TipoToken.PARENTESE_DIREITO:
+        return OpBin(operador, op_esquerdo, op_direito), pos
+    else:
+        sys.exit(f"Token inválido: {tokens[pos]}")
+
+
 def analisa_exp(tokens, pos):
     if tokens[pos].tipo == TipoToken.NUMERO:
         return Const(tokens[pos].lexema), pos 
@@ -146,18 +156,14 @@ def analisa_exp(tokens, pos):
         op_esquerdo, pos = analisa_exp(tokens, pos + 1)
         operador, pos = analisa_operador(tokens, pos + 1)   
         op_direito, pos = analisa_exp(tokens, pos + 1)
-
-        if tokens[pos+1].tipo == TipoToken.PARENTESE_DIREITO:
-            return OpBin(operador, op_esquerdo, op_direito), pos + 1
-        else:
-            raise ValueError(f"Token inválido: {tokens[pos]}")
+        return analisa_parenteses(tokens, pos + 1, operador, op_esquerdo, op_direito)
 
     else:
         raise ValueError(f"Token inválido: {tokens[pos]}")
    
 
 
-def read_tree(exp: Exp, indent=0, prefix="", is_last=True): #Lê a arvore de forma estruturada
+def read_tree(exp: Exp, indent=0, prefix="", is_last=True): #Lê a arvore de forma estruturada [ gpt :D ]
     """Retorna representação em string da árvore sintática de forma hierárquica"""
     # Mapeamento de operadores para símbolos
     ops = {
