@@ -1,1 +1,1 @@
-(33 + (912 * 11)/2 -10) #com espaços sem padrão
+((33 + (912 * 11))/(2 - 10)) #com espaços sem padrão
