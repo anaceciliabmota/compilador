@@ -1,6 +1,21 @@
 import sys
 from utils import (Token, tipo_token, TipoToken, scan_tokens, find_errors, 
-                   analisa_exp, read_tree, validar_parenteses, ErroSintatico)
+                   analisa_exp, read_tree, validar_parenteses, ErroSintatico, translator)
+
+
+prologo = """   
+    .section .text
+    .globl _start
+
+_start:
+"""
+epilogo = """
+    call imprime_num
+    call sair
+
+.include "runtime.s"
+"""
+
 
 def main():
     if len(sys.argv) != 2:
@@ -23,17 +38,17 @@ def main():
         print("Compilação abortada devido a erros léxicos.")
         sys.exit(1)
     
-    print("--------------\nAnálise léxica:")
-    tokens_visiveis = [t for t in tokens if t.tipo not in [TipoToken.EOF]]
-    for token in tokens_visiveis:
-        print(token)
+    # print("--------------\nAnálise léxica:")
+    # tokens_visiveis = [t for t in tokens if t.tipo not in [TipoToken.EOF]]
+    # for token in tokens_visiveis:
+    #     print(token)
     
     try:
         # Valida parenteses balanceados
         validar_parenteses(tokens)
         
         # Análise sintática
-        print("\n\n--------------\nAnálise sintática:")
+        #print("\n\n--------------\nAnálise sintática:")
         exp, pos = analisa_exp(tokens, 0)
         
         pos += 1
@@ -47,11 +62,9 @@ def main():
             pos += 1
         
         # árvore sintática
-        print(read_tree(exp))
+        print(prologo + translator(exp) + epilogo)
         
-        print("\n\n--------------\nValor da expressão:")
-        resultado = exp.avaliar()
-        print(resultado)
+        
         
     except ErroSintatico as e:
         print(f"\n\nErro sintático: {e.mensagem}")

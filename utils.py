@@ -190,7 +190,7 @@ def analisa_parenteses(tokens, pos, operador, op_esquerdo, op_direito):
     if pos >= len(tokens):
         raise ErroSintatico(
             "Esperado parêntese direito ')' mas fim da entrada alcançado",
-            tokens[-1].posicao if tokens else 0
+            tokens[analisa_exp-1].posicao if tokens else 0
         )
     
     token = tokens[pos]
@@ -303,3 +303,29 @@ def read_tree(exp: Exp, indent=0, prefix="", is_last=True): #Lê a arvore de for
         raise ValueError(f"Expressão inválida: {exp}")
     
     return "\n".join(resultado)
+
+
+def translator(exp: Exp) -> str:
+    """Gera código em Python a partir da árvore sintática"""
+    answer = ""
+    if isinstance(exp, Const):
+        answer = f"mov ${exp.valor}, %rax\n"
+    else:
+        answer += translator(exp.esquerda)
+        answer += "push %rax\n"
+        answer += translator(exp.direita)
+        answer += f"mov %rax, %rbx\npop %rax\n"
+        operator = exp.operador
+        if operator == TipoToken.SOMA:
+            answer += f"add %rbx, %rax\n"
+        elif operator == TipoToken.SUBTRACAO:
+            answer += f"sub %rbx, %rax\n"
+        elif operator == TipoToken.MULTIPLICACAO:
+            answer += f"imul %rbx, %rax\n"
+        elif operator == TipoToken.DIVISAO:
+            answer += "cqo\n"
+            answer += "idiv %rbx\n"
+    return answer
+        
+        
+
