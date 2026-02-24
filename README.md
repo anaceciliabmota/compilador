@@ -13,7 +13,7 @@ Siga os passos abaixo para compilar e executar o programa:
    ```
    Exemplo:
    ```bash
-   ./build.sh entrada.txt saida.s programa
+   ./build.sh test_files/teste1 teste1.s teste1
    ```
 
    Após a execução, os arquivos gerados serão organizados nas seguintes pastas:
@@ -26,3 +26,7 @@ Siga os passos abaixo para compilar e executar o programa:
    ```bash
    ./executables/<nome_do_executavel>
     ```
+    Exemplo
+    ```bash
+   ./executables/teste1
+   ```
