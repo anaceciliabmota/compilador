@@ -42,6 +42,7 @@ def main():
         # Valida parenteses balanceados
         exp, pos = exp_a(tokens, 0)
         str = translator(exp)
+
         print(prologo + str + epilogo)
     
     except ErroSintatico as e:

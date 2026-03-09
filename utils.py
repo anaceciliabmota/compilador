@@ -95,8 +95,9 @@ def scan_tokens(conteudo):
     return tokens
 
 def olharProxToken(tokens, pos):
-    if pos < len(tokens):
+    if pos + 1 < len(tokens):
         return tokens[pos+1]
+    return None
 
 def find_errors(tokens):
     """léxicos"""
@@ -359,5 +360,13 @@ def prim(tokens: List[Token], pos: int):
         exp = Const(tokens[pos].lexema)
     elif tokens[pos].tipo == TipoToken.PARENTESE_ESQUERDO:
         exp, pos = exp_a(tokens, pos+1)
+        # Consume the closing parenthesis
+        if pos + 1 < len(tokens) and tokens[pos + 1].tipo == TipoToken.PARENTESE_DIREITO:
+            pos = pos + 1
+        else:
+            raise ErroSintatico(
+                f"Esperado parêntese direito ')' após expressão",
+                tokens[pos + 1].posicao if pos + 1 < len(tokens) else tokens[pos].posicao
+            )
     
     return exp, pos
