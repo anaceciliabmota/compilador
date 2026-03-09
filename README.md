@@ -30,3 +30,7 @@ Siga os passos abaixo para compilar e executar o programa:
     ```bash
    ./executables/teste1
    ```
+
+3. **Testes**
+   - Os testes para expressões com parenteses obrigatórios (Expressões Constantes 1) se encontram na pasta [test_files_ec1](test_files_ec1)
+   - Os testes para expressões com parenteses obrigatórios (Expressões Constantes 2) se encontram na pasta [test_files_ec2](test_files_ec2)
