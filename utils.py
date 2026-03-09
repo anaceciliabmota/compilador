@@ -1,5 +1,6 @@
 from enum import Enum
 import sys
+from typing import List
 
 class TipoToken(Enum):
     NUMERO = "Numero"
@@ -51,6 +52,7 @@ def tipo_token(strings):
     else:
         return TipoToken.ERROR
 
+
 def scan_tokens(conteudo):
     tokens = []
     pos = 0
@@ -91,6 +93,10 @@ def scan_tokens(conteudo):
     tokens.append(Token(TipoToken.EOF, '', eof_pos))
     
     return tokens
+
+def olharProxToken(tokens, pos):
+    if pos < len(tokens):
+        return tokens[pos+1]
 
 def find_errors(tokens):
     """léxicos"""
@@ -146,7 +152,6 @@ def analisa_operador(tokens, pos):
             token.posicao
         )
 
-
 class Exp:
     pass
 
@@ -185,7 +190,6 @@ class OpBin(Exp):
     def __repr__(self):
         return f"OpBin({self.esquerda}, {self.operador.value}, {self.direita})"
 
-
 def analisa_parenteses(tokens, pos, operador, op_esquerdo, op_direito):
     if pos >= len(tokens):
         raise ErroSintatico(
@@ -207,7 +211,6 @@ def analisa_parenteses(tokens, pos, operador, op_esquerdo, op_direito):
             f"Esperado parêntese direito ')' mas encontrado '{token.lexema}' na posição {token.posicao}",
             token.posicao
         )
-
 
 def analisa_exp(tokens, pos):
     if pos >= len(tokens):
@@ -260,8 +263,6 @@ def analisa_exp(tokens, pos):
             token.posicao
         )
    
-
-
 def read_tree(exp: Exp, indent=0, prefix="", is_last=True): #Lê a arvore de forma estruturada [ gpt :D ]
     """Retorna representação em string da árvore sintática de forma hierárquica"""
     # Mapeamento de operadores para símbolos
@@ -304,7 +305,6 @@ def read_tree(exp: Exp, indent=0, prefix="", is_last=True): #Lê a arvore de for
     
     return "\n".join(resultado)
 
-
 def translator(exp: Exp) -> str:
     """Gera código em Python a partir da árvore sintática"""
     answer = ""
@@ -326,6 +326,38 @@ def translator(exp: Exp) -> str:
             answer += "cqo\n"
             answer += "idiv %rbx\n"
     return answer
-        
-        
 
+def exp_a(tokens: List[Token], pos: int):
+    esq, pos = exp_m(tokens, pos)
+    tok = olharProxToken(tokens, pos)
+    while tok and tok.tipo in [TipoToken.SOMA, TipoToken.SUBTRACAO]:
+        pos = pos + 1
+        dir, pos = exp_m(tokens, pos+1)
+        if tok.tipo == TipoToken.SOMA:
+            esq = OpBin(TipoToken.SOMA, esq, dir)
+        else:
+            esq = OpBin(TipoToken.SUBTRACAO, esq, dir)
+        tok = olharProxToken(tokens, pos)
+
+    return esq, pos
+
+def exp_m(tokens: List[Token], pos: int):
+    esq, pos = prim(tokens, pos)
+    tok = olharProxToken(tokens, pos)
+    while tok and tok.tipo in [TipoToken.MULTIPLICACAO, TipoToken.DIVISAO]:
+        pos = pos + 1
+        dir, pos = prim(tokens, pos+1)
+        if tok.tipo == TipoToken.MULTIPLICACAO:
+            esq = OpBin(TipoToken.MULTIPLICACAO, esq, dir)
+        else:
+            esq = OpBin(TipoToken.DIVISAO, esq, dir)
+        tok = olharProxToken(tokens, pos)
+    return esq, pos
+
+def prim(tokens: List[Token], pos: int):
+    if tokens[pos].tipo == TipoToken.NUMERO:
+        exp = Const(tokens[pos].lexema)
+    elif tokens[pos].tipo == TipoToken.PARENTESE_ESQUERDO:
+        exp, pos = exp_a(tokens, pos+1)
+    
+    return exp, pos
