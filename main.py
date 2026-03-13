@@ -1,6 +1,6 @@
 import sys
 from utils import (Token, tipo_token, TipoToken, scan_tokens, find_errors, 
-                   analisa_exp, read_tree, validar_parenteses, ErroSintatico, translator, exp_a)
+                   analisa_exp, read_tree, validar_parenteses, ErroSintatico, translator, exp_a, programa)
 
 
 prologo = """   
@@ -33,17 +33,17 @@ def main():
     
     # Análise léxica
     tokens = scan_tokens(conteudo)
+    # for token in tokens:
+    #     print(token)
     
     if find_errors(tokens):
         print("Compilação abortada devido a erros léxicos.")
         sys.exit(1)
-
     try:
         # Valida parenteses balanceados
-        exp, pos = exp_a(tokens, 0)
-        str = translator(exp)
+        p, pos = programa(tokens)
 
-        print(prologo + str + epilogo)
+        print(p)
     
     except ErroSintatico as e:
         print(f"\n\nErro sintático: {e.mensagem}")

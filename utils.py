@@ -13,6 +13,9 @@ class TipoToken(Enum):
     COMENTARIO = "Coment"
     ERROR = "Error"
     EOF = "EOF"
+    SEMICOLON = "SemiColon"
+    EQUAL = "Assignment"
+    IDENTIFIER = "Identifier"
 
 class ErroSintatico(Exception):
     def __init__(self, mensagem, posicao=None):
@@ -45,8 +48,15 @@ def tipo_token(strings):
         return TipoToken.PARENTESE_ESQUERDO
     elif strings == ")":
         return TipoToken.PARENTESE_DIREITO
-    elif strings == " ":
+    elif strings == ";":
+        return TipoToken.SEMICOLON
+    elif strings == "=":
+        return TipoToken.EQUAL
+    elif strings in (" ", "\n", "\t"):
         return "WHITESPACE"
+    elif strings.isalpha:
+        return TipoToken.IDENTIFIER
+    
     elif strings.startswith("#"):
         return TipoToken.COMENTARIO
     else:
@@ -74,8 +84,12 @@ def scan_tokens(conteudo):
                 lexema += conteudo[p]
                 p += 1
             pos = p - 1
-        
+
         tipo = tipo_token(lexema)
+        if tipo == TipoToken.IDENTIFIER:
+            while pos + 1 < len(conteudo) and conteudo[pos + 1].isalnum():
+                lexema += conteudo[pos + 1]
+                pos += 1
         
         if tipo == "WHITESPACE":
             pos += 1
@@ -190,6 +204,21 @@ class OpBin(Exp):
 
     def __repr__(self):
         return f"OpBin({self.esquerda}, {self.operador.value}, {self.direita})"
+    
+class Identificador(Exp):
+    def __init__(self, nome: str):
+        self.nome = nome
+    def __repr__(self):
+        return f"Identificador({self.nome})"
+
+class Declaracao:
+    nome: str
+    exp: Exp 
+    def __init__(self, nome: str, exp: Exp):
+        self.nome = nome
+        self.exp = exp
+    def __repr__(self):
+        return f"Declaracao({self.nome} = {self.exp})"
 
 def analisa_parenteses(tokens, pos, operador, op_esquerdo, op_direito):
     if pos >= len(tokens):
@@ -329,6 +358,7 @@ def translator(exp: Exp) -> str:
     return answer
 
 def exp_a(tokens: List[Token], pos: int):
+
     esq, pos = exp_m(tokens, pos)
     tok = olharProxToken(tokens, pos)
     while tok and tok.tipo in [TipoToken.SOMA, TipoToken.SUBTRACAO]:
@@ -356,11 +386,16 @@ def exp_m(tokens: List[Token], pos: int):
     return esq, pos
 
 def prim(tokens: List[Token], pos: int):
-    if tokens[pos].tipo == TipoToken.NUMERO:
-        exp = Const(tokens[pos].lexema)
-    elif tokens[pos].tipo == TipoToken.PARENTESE_ESQUERDO:
-        exp, pos = exp_a(tokens, pos+1)
-        # Consume the closing parenthesis
+    tok = tokens[pos]
+    if tok.tipo == TipoToken.NUMERO:
+        exp = Const(tok.lexema)
+    
+    elif tok.tipo == TipoToken.IDENTIFIER:
+        exp = Identificador(tok.lexema)
+    
+    # incluir identificador
+    elif tok.tipo == TipoToken.PARENTESE_ESQUERDO:
+        exp, pos = exp_a(tokens, pos + 1)
         if pos + 1 < len(tokens) and tokens[pos + 1].tipo == TipoToken.PARENTESE_DIREITO:
             pos = pos + 1
         else:
@@ -368,5 +403,60 @@ def prim(tokens: List[Token], pos: int):
                 f"Esperado parêntese direito ')' após expressão",
                 tokens[pos + 1].posicao if pos + 1 < len(tokens) else tokens[pos].posicao
             )
+    else:
+        raise ErroSintatico(
+            f"Esperado número, identificador ou '(' na posição {tok.posicao}",
+            tok.posicao
+        )
     
     return exp, pos
+
+class Programa:
+    declaracoes: List[Declaracao]
+    exp_final: Exp
+    def __init__(self, declaracoes: List[Declaracao], exp_final: Exp):
+        self.declaracoes = declaracoes
+        self.exp_final = exp_final
+    def __repr__(self):
+        return f"Programa({self.declaracoes}, {self.exp_final})"
+
+
+def decl (tokens: List[Token], pos: int):
+    tok = tokens[pos]
+    nome = tok.lexema
+    pos = pos + 1
+    tok = tokens[pos]
+    if tok.tipo == TipoToken.EQUAL:
+        pos = pos + 1
+        exp, pos = exp_a(tokens, pos)
+        return Declaracao(nome, exp), pos
+    else:
+        raise ErroSintatico(
+            f"Esperado sinal de igual '=' na posição {tok.posicao}",
+            tok.posicao
+        )
+
+
+def programa(tokens: List[Token]):
+    pos = 0
+    tok = tokens[pos]
+    declaracoes = []
+    while tok.tipo == TipoToken.IDENTIFIER:
+        dec, pos = decl(tokens, pos)
+        declaracoes.append(dec)
+        pos = pos + 1
+        tok = tokens[pos]
+        if tok.tipo == TipoToken.SEMICOLON:
+            pos = pos + 1
+            tok = tokens[pos]
+    
+    if tok.tipo != TipoToken.EQUAL:
+        raise ErroSintatico(
+            f"Esperado sinal de igual '=' na expressao final",
+            tok.posicao
+        )
+    pos = pos + 1
+    exp_final, pos = exp_a(tokens, pos)
+
+    return Programa(declaracoes, exp_final), pos
+    
