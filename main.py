@@ -53,6 +53,9 @@ def main():
         sys.exit(1)
     
     tokens = scan_tokens(conteudo)
+    for token in tokens:
+        print(token)
+
     if find_errors(tokens):
         print("Compilação abortada devido a erros léxicos.")
         sys.exit(1)
@@ -60,6 +63,8 @@ def main():
     try:
         p, pos = programa(tokens)
         print("Árvore Sintática gerada com sucesso!")
+        print(p)
+        exit(0)
         
         analise_semantica(p)
         print("Análise Semântica (Verificação de Variáveis) aprovada!")

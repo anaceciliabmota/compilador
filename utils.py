@@ -15,6 +15,16 @@ class TipoToken(Enum):
     SEMICOLON = "SemiColon"
     EQUAL = "Assignment"
     IDENTIFIER = "Identifier"
+    CHAVES_ESQUERDO = "ChavesEsq"
+    CHAVES_DIREITO = "ChavesDir"
+    MAIOR_QUE = "MaiorQue"
+    MENOR_QUE = "MenorQue"
+    IGUAL_A = "IgualA"
+    RETURN = "Return"
+    IF = "If"
+    ELSE = "Else"
+    WHILE = "While"
+   
 
 class ErroSintatico(Exception):
     def __init__(self, mensagem, posicao=None):
@@ -61,8 +71,28 @@ def tipo_token(strings):
         return TipoToken.IDENTIFIER
     elif strings.startswith("#"):
         return TipoToken.COMENTARIO
+    elif strings == ">":
+        return TipoToken.MAIOR_QUE
+    elif strings == "<":
+        return TipoToken.MENOR_QUE
+    elif strings == "{":
+        return TipoToken.CHAVES_ESQUERDO
+    elif strings == "}":
+        return TipoToken.CHAVES_DIREITO
     else:
         return TipoToken.ERROR
+
+def identify_comand(lexema):
+    if lexema == "if":
+        return TipoToken.IF
+    elif lexema == "else":
+        return TipoToken.ELSE
+    elif lexema == "while":
+        return TipoToken.WHILE
+    elif lexema == "return":
+        return TipoToken.RETURN
+    else:
+        return TipoToken.IDENTIFIER
 
 def scan_tokens(conteudo):
     tokens = []
@@ -91,6 +121,14 @@ def scan_tokens(conteudo):
             while pos + 1 < len(conteudo) and (conteudo[pos + 1].isalnum()):
                 lexema += conteudo[pos + 1]
                 pos += 1
+            
+            tipo = identify_comand(lexema)
+
+        if tipo == TipoToken.EQUAL:
+            if conteudo[pos + 1] == "=":
+                lexema += conteudo[pos + 1]
+                pos += 1
+                tipo = TipoToken.IGUAL_A
         
         if tipo == "WHITESPACE":
             pos += 1
@@ -144,12 +182,47 @@ class Declaracao:
     def __repr__(self):
         return f"Declaracao({self.nome} = {self.exp})"
 
+class Cmd:
+    pass
+
+class CmdAtrib(Cmd):
+    def __init__(self, nome: str, exp: Exp):
+        self.nome = nome
+        self.exp = exp
+    def __repr__(self):
+        return f"CmdAtrib({self.nome} = {self.exp})"
+
+class CmdIf(Cmd):
+    def __init__(self, condicao: Exp, corpo_then: list, corpo_else: list):
+        self.condicao = condicao
+        self.corpo_then = corpo_then
+        self.corpo_else = corpo_else
+    def __repr__(self):
+        return f"CmdIf({self.condicao}, {self.corpo_then}, {self.corpo_else})"
+
+class CmdWhile(Cmd):
+    def __init__(self, condicao: Exp, corpo: list):
+        self.condicao = condicao
+        self.corpo = corpo
+    def __repr__(self):
+        return f"CmdWhile({self.condicao}, {self.corpo})"
+
 class Programa:
-    def __init__(self, declaracoes: List[Declaracao], exp_final: Exp):
+    def __init__(self, declaracoes: List[Declaracao], comandos: List[Cmd], exp_final: Exp):
         self.declaracoes = declaracoes
+        self.comandos = comandos
         self.exp_final = exp_final
     def __repr__(self):
-        return f"Programa(Declaracoes: {self.declaracoes}, Resultado: {self.exp_final})"
+        return f"Programa(Declaracoes: {self.declaracoes}, Comandos: {self.comandos}, Resultado: {self.exp_final})"
+    
+def exp_c(tokens, pos):
+  esq, pos = exp_a(tokens, pos)
+  while pos < len(tokens) and tokens[pos].tipo in [TipoToken.MENOR_QUE, TipoToken.MAIOR_QUE, TipoToken.IGUAL_A]:
+      tok = tokens[pos]
+      pos += 1
+      dir, pos = exp_a(tokens, pos)
+      esq = OpBin(tok.tipo, esq, dir)
+  return esq, pos
 
 def exp_a(tokens: List[Token], pos: int):
     esq, pos = exp_m(tokens, pos)
@@ -179,7 +252,7 @@ def prim(tokens: List[Token], pos: int):
     elif tok.tipo == TipoToken.IDENTIFIER:
         return Identificador(tok.lexema), pos + 1
     elif tok.tipo == TipoToken.PARENTESE_ESQUERDO:
-        exp, pos = exp_a(tokens, pos + 1)
+        exp, pos = exp_c(tokens, pos + 1)
         if pos < len(tokens) and tokens[pos].tipo == TipoToken.PARENTESE_DIREITO:
             return exp, pos + 1
         else:
@@ -196,6 +269,54 @@ def decl(tokens: List[Token], pos: int):
     else:
         raise ErroSintatico("Esperado sinal de igual '='", tokens[pos].posicao)
 
+def cmd_atrib(tokens, pos):
+    nome = tokens[pos].lexema
+    pos += 1  # consome identificador
+    if tokens[pos].tipo != TipoToken.EQUAL:
+        raise ErroSintatico("Esperado '=' na atribuição", tokens[pos].posicao)
+    exp_val, pos = exp_c(tokens, pos + 1)
+    if tokens[pos].tipo != TipoToken.SEMICOLON:
+        raise ErroSintatico("Esperado ';' após atribuição", tokens[pos].posicao)
+    return CmdAtrib(nome, exp_val), pos + 1
+
+def lista_cmds(tokens, pos):
+  cmds = []
+  while tokens[pos].tipo in [TipoToken.IF, TipoToken.WHILE, TipoToken.IDENTIFIER]:
+      c, pos = cmd(tokens, pos)
+      cmds.append(c)
+  return cmds, pos
+
+def cmd(tokens, pos):
+    if tokens[pos].tipo == TipoToken.IF:
+        return cmd_if(tokens, pos)
+    elif tokens[pos].tipo == TipoToken.WHILE:
+        return cmd_while(tokens, pos)
+    elif tokens[pos].tipo == TipoToken.IDENTIFIER:
+        return cmd_atrib(tokens, pos)
+    else:
+        raise ErroSintatico(f"Comando esperado", tokens[pos].posicao)
+
+def cmd_if(tokens, pos):
+    pos += 1  # consome 'if'
+    cond, pos = exp_c(tokens, pos)
+    pos += 1  # consome '{'
+    cmds_true, pos = lista_cmds(tokens, pos)
+    pos += 1  # consome '}'
+    pos += 1  # consome 'else'
+    pos += 1  # consome '{'
+    cmds_false, pos = lista_cmds(tokens, pos)
+    pos += 1  # consome '}'
+    return CmdIf(cond, cmds_true, cmds_false), pos
+
+def cmd_while(tokens, pos):
+    pos += 1  # consome 'while'
+    cond, pos = exp_c(tokens, pos)
+    pos += 1  # consome '{'
+    cmds, pos = lista_cmds(tokens, pos)
+    pos += 1  # consome '}'
+    return CmdWhile(cond, cmds), pos
+
+
 def programa(tokens: List[Token]):
     pos = 0
     declaracoes = []
@@ -206,14 +327,29 @@ def programa(tokens: List[Token]):
         if pos < len(tokens) and tokens[pos].tipo == TipoToken.SEMICOLON:
             pos += 1
         else:
-            raise ErroSintatico("Esperado ';' após declaração", tokens[pos].posicao if pos < len(tokens) else 0)
-            
-    if pos < len(tokens) and tokens[pos].tipo == TipoToken.EQUAL:
-        exp_final, pos = exp_a(tokens, pos + 1)
-        return Programa(declaracoes, exp_final), pos
-    else:
-        raise ErroSintatico("Esperado sinal de igual '=' na expressão final", tokens[pos].posicao if pos < len(tokens) else 0)
+            raise ErroSintatico("Esperado ';' após declaração", tokens[pos].posicao)
 
+    if tokens[pos].tipo != TipoToken.CHAVES_ESQUERDO:
+        raise ErroSintatico("Esperado '{' para iniciar o corpo", tokens[pos].posicao)
+    pos += 1  # consome '{'
+    cmds, pos = lista_cmds(tokens, pos)
+
+    if tokens[pos].tipo != TipoToken.RETURN:
+        raise ErroSintatico("Esperado 'return'", tokens[pos].posicao)
+    pos += 1  # consome 'return'
+
+    exp_final, pos = exp_c(tokens, pos)
+
+    if tokens[pos].tipo != TipoToken.SEMICOLON:
+        raise ErroSintatico("Esperado ';' após expressão de retorno", tokens[pos].posicao)
+    pos += 1  # consome ';'
+
+    if tokens[pos].tipo != TipoToken.CHAVES_DIREITO:
+        raise ErroSintatico("Esperado '}' para fechar o corpo", tokens[pos].posicao)
+    pos += 1  # consome '}'
+
+    return Programa(declaracoes, cmds, exp_final), pos
+    
 def verifica_uso_variaveis(exp: Exp, tabela_simbolos: set):
     if isinstance(exp, Identificador):
         if exp.nome not in tabela_simbolos:
