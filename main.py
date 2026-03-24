@@ -1,8 +1,8 @@
 import sys
 import os
 import subprocess
-from utils import (scan_tokens, find_errors, programa, analise_semantica, 
-                   ErroSintatico, ErroSemantico, translator)
+from tokens import ErroSintatico, ErroSemantico, scan_tokens, find_errors
+from utils import programa, analise_semantica, translator
 
 epilogo = """
     call imprime_num
