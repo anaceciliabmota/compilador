@@ -144,12 +144,30 @@ def verifica_uso_variaveis(exp: Exp, tabela_simbolos: set):
     elif isinstance(exp, OpBin):
         verifica_uso_variaveis(exp.esquerda, tabela_simbolos)
         verifica_uso_variaveis(exp.direita, tabela_simbolos)
+    
+def verifica_cmd(cmd, tabela_simbolos: set):
+    if isinstance(cmd, CmdAtrib):
+        verifica_uso_variaveis(cmd.exp, tabela_simbolos)       # lado direito
+        if cmd.nome not in tabela_simbolos:                    # lado esquerdo
+            raise ErroSemantico(f"Variável '{cmd.nome}' não foi declarada.")
+    elif isinstance(cmd, CmdIf):
+        verifica_uso_variaveis(cmd.condicao, tabela_simbolos)
+        for c in cmd.corpo_then:
+            verifica_cmd(c, tabela_simbolos)
+        for c in cmd.corpo_else:
+            verifica_cmd(c, tabela_simbolos)
+    elif isinstance(cmd, CmdWhile):
+        verifica_uso_variaveis(cmd.condicao, tabela_simbolos)
+        for c in cmd.corpo:
+            verifica_cmd(c, tabela_simbolos)
 
 def analise_semantica(prog: Programa):
     tabela_simbolos = set()
     for d in prog.declaracoes:
         verifica_uso_variaveis(d.exp, tabela_simbolos)
         tabela_simbolos.add(d.nome)
+    for c in prog.comandos:                                    # <-- novo
+        verifica_cmd(c, tabela_simbolos)
     verifica_uso_variaveis(prog.exp_final, tabela_simbolos)
 
 # --- TRADUTOR ASSEMBLY ---
