@@ -131,7 +131,7 @@ def scan_tokens(conteudo):
                 pos += 1
                 tipo = TipoToken.IGUAL_A
 
-        if tipo == "WHITESPACE":
+        if tipo in ("WHITESPACE", TipoToken.COMENTARIO):
             pos += 1
             continue
 

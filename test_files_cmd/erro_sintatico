@@ -1,0 +1,9 @@
+# erro: falta o '}' para fechar o bloco do while
+n = 1;
+soma = 0;
+{
+ while n < 5 {
+  soma = soma + n;
+  n = n + 1;
+ return soma;
+}

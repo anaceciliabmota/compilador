@@ -2,7 +2,8 @@ import sys
 import os
 import subprocess
 from tokens import ErroSintatico, ErroSemantico, scan_tokens, find_errors
-from utils import programa, analise_semantica, translator
+from utils import programa, analise_semantica
+from codegen import translator, gerar_atribuicao, gerar_lista_cmds
 
 epilogo = """
     call imprime_num
@@ -13,28 +14,29 @@ epilogo = """
 
 def gerar_codigo_programa(prog):
     codigo_asm = ""
-    
-    # 1.(BSS)
+
+    # 1. BSS — reserva espaço para cada variável declarada
     codigo_asm += ".section .bss\n"
     for decl in prog.declaracoes:
         codigo_asm += f".lcomm {decl.nome}, 8\n"
-        
-    # 2. Ponto de Entrada 
+
+    # 2. Ponto de entrada
     codigo_asm += "\n.section .text\n"
     codigo_asm += ".globl _start\n"
     codigo_asm += "_start:\n"
-    
-    # 3. Declarações
+
+    # 3. Declarações — avalia e armazena cada variável
     for decl in prog.declaracoes:
-        codigo_asm += f"    # {decl.nome} = ...\n"
-        codigo_asm += translator(decl.exp)
-        codigo_asm += f"    mov %rax, {decl.nome}\n\n"
-        
-    # 4. Resultado
-    codigo_asm += "    # Expressao Final\n"
+        codigo_asm += gerar_atribuicao(decl.nome, decl.exp)
+
+    # 4. Comandos — if, while, atribuições
+    codigo_cmds, _ = gerar_lista_cmds(prog.comandos, 0)
+    codigo_asm += codigo_cmds
+
+    # 5. Expressão de retorno
     codigo_asm += translator(prog.exp_final)
-    
-    # 5. Finaliza a execução
+
+    # 6. Finaliza execução
     codigo_asm += epilogo
     return codigo_asm
 
@@ -53,8 +55,6 @@ def main():
         sys.exit(1)
     
     tokens = scan_tokens(conteudo)
-    for token in tokens:
-        print(token)
 
     if find_errors(tokens):
         print("Compilação abortada devido a erros léxicos.")
@@ -63,11 +63,9 @@ def main():
     try:
         p, pos = programa(tokens)
         print("Árvore Sintática gerada com sucesso!")
-        print(p)
-        exit(0)
         
         analise_semantica(p)
-        print("Análise Semântica (Verificação de Variáveis) aprovada!")
+        print("Análise Semântica (Verificação de Variáveis e Atribuições) aprovada!")
         
         assembly = gerar_codigo_programa(p)
         

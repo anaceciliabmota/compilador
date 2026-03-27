@@ -169,29 +169,3 @@ def analise_semantica(prog: Programa):
     for c in prog.comandos:                                    # <-- novo
         verifica_cmd(c, tabela_simbolos)
     verifica_uso_variaveis(prog.exp_final, tabela_simbolos)
-
-# --- TRADUTOR ASSEMBLY ---
-def translator(exp: Exp) -> str:
-    answer = ""
-    if isinstance(exp, Const):
-        answer = f"    mov ${exp.valor}, %rax\n"
-    elif isinstance(exp, Identificador):
-        answer = f"    mov {exp.nome}, %rax\n"
-    elif isinstance(exp, OpBin):
-        answer += translator(exp.esquerda)
-        answer += "    push %rax\n"
-        answer += translator(exp.direita)
-        answer += "    pop %rbx\n"      # Pop esquerda em RBX
-        answer += "    xchg %rax, %rbx\n" # RAX = esquerda, RBX = direita
-        
-        operator = exp.operador
-        if operator == TipoToken.SOMA:
-            answer += "    add %rbx, %rax\n"
-        elif operator == TipoToken.SUBTRACAO:
-            answer += "    sub %rbx, %rax\n"
-        elif operator == TipoToken.MULTIPLICACAO:
-            answer += "    imul %rbx, %rax\n"
-        elif operator == TipoToken.DIVISAO:
-            answer += "    cqo\n"
-            answer += "    idiv %rbx\n"
-    return answer
