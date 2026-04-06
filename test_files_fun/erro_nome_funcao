@@ -1,0 +1,10 @@
+fun soma(a, b)
+{
+    return a + b;
+}
+var c = 5;
+var d = 7;
+
+main {
+    return soma(e, f);
+}

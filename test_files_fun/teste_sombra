@@ -1,0 +1,9 @@
+var x = 99;
+
+fun f(x) {
+    return x;
+}
+
+main {
+    return f(1);
+}

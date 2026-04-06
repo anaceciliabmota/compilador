@@ -3,7 +3,7 @@ import os
 import subprocess
 from tokens import ErroSintatico, ErroSemantico, scan_tokens, find_errors
 from utils import programa, analise_semantica
-from codegen import translator, gerar_atribuicao, gerar_lista_cmds
+from codegen import translator, gerar_atribuicao, gerar_lista_cmds, gerar_corpo_funcao
 
 epilogo = """
     call imprime_num
@@ -13,30 +13,41 @@ epilogo = """
 """
 
 def gerar_codigo_programa(prog):
+    from syntax import Declaracao, DeclaracaoFuncao
     codigo_asm = ""
 
-    # 1. BSS — reserva espaço para cada variável declarada
+    # 1. BSS — reserva espaço apenas para variáveis globais
     codigo_asm += ".section .bss\n"
     for decl in prog.declaracoes:
-        codigo_asm += f".lcomm {decl.nome}, 8\n"
+        if isinstance(decl, Declaracao):
+            codigo_asm += f".lcomm {decl.nome}, 8\n"
 
-    # 2. Ponto de entrada
     codigo_asm += "\n.section .text\n"
+
+    # 2. Corpos das funções declaradas (antes de _start)
+    contador = 0
+    for decl in prog.declaracoes:
+        if isinstance(decl, DeclaracaoFuncao):
+            codigo_func, contador = gerar_corpo_funcao(decl, contador)
+            codigo_asm += codigo_func
+
+    # 3. Ponto de entrada
     codigo_asm += ".globl _start\n"
     codigo_asm += "_start:\n"
 
-    # 3. Declarações — avalia e armazena cada variável
+    # 4. Inicialização das variáveis globais
     for decl in prog.declaracoes:
-        codigo_asm += gerar_atribuicao(decl.nome, decl.exp)
+        if isinstance(decl, Declaracao):
+            codigo_asm += gerar_atribuicao(decl.nome, decl.exp)
 
-    # 4. Comandos — if, while, atribuições
-    codigo_cmds, _ = gerar_lista_cmds(prog.comandos, 0)
+    # 5. Comandos do bloco main
+    codigo_cmds, _ = gerar_lista_cmds(prog.comandos, contador)
     codigo_asm += codigo_cmds
 
-    # 5. Expressão de retorno
+    # 6. Expressão de retorno do main
     codigo_asm += translator(prog.exp_final)
 
-    # 6. Finaliza execução
+    # 7. Finaliza execução
     codigo_asm += epilogo
     return codigo_asm
 
@@ -63,10 +74,11 @@ def main():
     try:
         p, pos = programa(tokens)
         print("Árvore Sintática gerada com sucesso!")
+        print(p)
         
         analise_semantica(p)
         print("Análise Semântica (Verificação de Variáveis e Atribuições) aprovada!")
-        
+
         assembly = gerar_codigo_programa(p)
         
         nome_sem_pasta = os.path.basename(nome_arquivo)

@@ -24,6 +24,10 @@ class TipoToken(Enum):
     IF = "If"
     ELSE = "Else"
     WHILE = "While"
+    FUN = "Fun"
+    VAR = "Var"
+    MAIN = "Main"
+    VIRGULA = "Virgula"
 
 
 class Token:
@@ -82,6 +86,8 @@ def tipo_token(strings):
         return TipoToken.CHAVES_ESQUERDO
     elif strings == "}":
         return TipoToken.CHAVES_DIREITO
+    elif strings == ",":
+        return TipoToken.VIRGULA
     else:
         return TipoToken.ERROR
 
@@ -92,6 +98,9 @@ def identify_comand(lexema):
         "else": TipoToken.ELSE,
         "while": TipoToken.WHILE,
         "return": TipoToken.RETURN,
+        "fun": TipoToken.FUN,
+        "var": TipoToken.VAR,
+        "main": TipoToken.MAIN,
     }
     return keywords.get(lexema, TipoToken.IDENTIFIER)
 
