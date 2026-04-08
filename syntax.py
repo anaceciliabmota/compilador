@@ -10,11 +10,24 @@ class Const(Exp):
     def __repr__(self):
         return self.valor
 
+class Booleano(Exp):
+    def __init__(self, valor: bool):
+        self.valor = valor
+    def __repr__(self):
+        return str(self.valor).lower()
+
 class Identificador(Exp):
     def __init__(self, nome: str):
         self.nome = nome
     def __repr__(self):
         return f"Identificador({self.nome})"
+
+class OpUnario(Exp):
+    def __init__(self, operador, expressao: Exp):
+        self.operador = operador
+        self.expressao = expressao
+    def __repr__(self):
+        return f"OpUnario({self.operador.value}, {self.expressao})"
 
 class OpBin(Exp):
     def __init__(self, operador, esquerda: Exp, direita: Exp):
@@ -32,24 +45,31 @@ class ChamadaFuncao(Exp):
         return f"ChamadaFuncao({self.nome}, {self.args})"
 
 class Declaracao:
-    def __init__(self, nome: str, exp: Exp):
+    def __init__(self, nome: str, tipo_var: str, exp: Exp):
         self.nome = nome
+        self.tipo_var = tipo_var
         self.exp = exp
     def __repr__(self):
-        return f"Declaracao({self.nome} = {self.exp})"
+        return f"Declaracao({self.nome}: {self.tipo_var} = {self.exp})"
 
 class DeclaracaoFuncao:
-    def __init__(self, nome: str, params: List[str], vardecls: List[Declaracao], comandos: list, exp_retorno: Exp):
+    def __init__(self, nome: str, params: List[tuple], tipo_retorno: str, vardecls: List[Declaracao], comandos: list):
         self.nome = nome
         self.params = params
+        self.tipo_retorno = tipo_retorno
         self.vardecls = vardecls
         self.comandos = comandos
-        self.exp_retorno = exp_retorno
     def __repr__(self):
-        return f"DeclaracaoFuncao({self.nome}, params={self.params}, vardecls={self.vardecls}, comandos={self.comandos}, exp_retorno={self.exp_retorno})"
+        return f"DeclaracaoFuncao({self.nome}, params={self.params}, retorno={self.tipo_retorno}, vardecls={self.vardecls}, comandos={self.comandos})"
 
 class Cmd:
     pass
+
+class CmdReturn(Cmd):
+    def __init__(self, exp: Exp):
+        self.exp = exp
+    def __repr__(self):
+        return f"CmdReturn({self.exp})"
 
 class CmdAtrib(Cmd):
     def __init__(self, nome: str, exp: Exp):
@@ -74,9 +94,8 @@ class CmdWhile(Cmd):
         return f"CmdWhile({self.condicao}, {self.corpo})"
 
 class Programa:
-    def __init__(self, declaracoes: list, comandos: List[Cmd], exp_final: Exp):
+    def __init__(self, declaracoes: list, comandos: List[Cmd]):
         self.declaracoes = declaracoes
         self.comandos = comandos
-        self.exp_final = exp_final
     def __repr__(self):
-        return f"Programa(Declaracoes: {self.declaracoes}, Comandos: {self.comandos}, Resultado: {self.exp_final})"
+        return f"Programa(Declaracoes: {self.declaracoes}, Comandos: {self.comandos})"
