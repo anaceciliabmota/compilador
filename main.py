@@ -44,10 +44,7 @@ def gerar_codigo_programa(prog):
     codigo_cmds, _ = gerar_lista_cmds(prog.comandos, contador)
     codigo_asm += codigo_cmds
 
-    # 6. Expressão de retorno do main
-    codigo_asm += translator(prog.exp_final)
-
-    # 7. Finaliza execução
+    # 6. Finaliza execução
     codigo_asm += epilogo
     return codigo_asm
 
@@ -106,7 +103,7 @@ def main():
         except subprocess.CalledProcessError:
             print("\n[ERRO] Ocorreu uma falha no Assembler ('as') ou Linker ('ld').")
             sys.exit(1)
-    
+        
     except ErroSintatico as e:
         print(f"\n[ERRO SINTÁTICO] {e.mensagem}")
         sys.exit(1)

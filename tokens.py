@@ -28,6 +28,17 @@ class TipoToken(Enum):
     VAR = "Var"
     MAIN = "Main"
     VIRGULA = "Virgula"
+    ALL = "All"
+    ANY = "Any"
+    NOT = "Not"
+    RESTO = "Resto"
+    EXPONENCIACAO = "Exponenciacao"
+    TRUE = "True"
+    FALSE = "False"
+    DOIS_PONTOS = "DoisPontos"
+    SETA = "Seta"
+    TIPO_INT = "Int"
+    TIPO_BOOL = "Bool"
 
 
 class Token:
@@ -88,6 +99,12 @@ def tipo_token(strings):
         return TipoToken.CHAVES_DIREITO
     elif strings == ",":
         return TipoToken.VIRGULA
+    elif strings == "%":
+        return TipoToken.RESTO
+    elif strings == "^":
+        return TipoToken.EXPONENCIACAO
+    elif strings == ":":
+        return TipoToken.DOIS_PONTOS
     else:
         return TipoToken.ERROR
 
@@ -101,6 +118,13 @@ def identify_comand(lexema):
         "fun": TipoToken.FUN,
         "var": TipoToken.VAR,
         "main": TipoToken.MAIN,
+        "all": TipoToken.ALL,
+        "any": TipoToken.ANY,
+        "not": TipoToken.NOT,
+        "true": TipoToken.TRUE,
+        "false": TipoToken.FALSE,
+        "int": TipoToken.TIPO_INT,
+        "bool": TipoToken.TIPO_BOOL,
     }
     return keywords.get(lexema, TipoToken.IDENTIFIER)
 
@@ -139,6 +163,12 @@ def scan_tokens(conteudo):
                 lexema += conteudo[pos + 1]
                 pos += 1
                 tipo = TipoToken.IGUAL_A
+            
+        if tipo == TipoToken.SUBTRACAO:
+            if pos + 1 < len(conteudo) and conteudo[pos + 1] == ">":
+                lexema += conteudo[pos + 1]
+                pos += 1
+                tipo = TipoToken.SETA
 
         if tipo in ("WHITESPACE", TipoToken.COMENTARIO):
             pos += 1
