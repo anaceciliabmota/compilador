@@ -1,0 +1,12 @@
+# resultado é 12
+a = 3;
+b = 4;
+res = 0;
+i = 0;
+{
+ while i < b {
+  res = res + a;
+  i = i + 1;
+ }
+ return res;
+}

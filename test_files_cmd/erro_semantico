@@ -1,0 +1,6 @@
+# erro: 'resultado' é usado na atribuição mas nunca foi declarado
+n = 5;
+{
+ resultado = n + 1;
+ return resultado;
+}

@@ -1,372 +1,379 @@
-from enum import Enum
-import sys
 from typing import List
+from tokens import TipoToken, Token, ErroSintatico, ErroSemantico
+from syntax import (
+    Exp, Const, Booleano, Identificador, OpUnario, OpBin, ChamadaFuncao,
+    Declaracao, DeclaracaoFuncao,
+    Cmd, CmdAtrib, CmdIf, CmdWhile, CmdReturn,
+    Programa,
+)
 
-class TipoToken(Enum):
-    NUMERO = "Numero"
-    SOMA = "Soma"
-    SUBTRACAO = "Sub"
-    MULTIPLICACAO = "Mult"
-    DIVISAO = "Div"
-    PARENTESE_ESQUERDO = "ParEsq"
-    PARENTESE_DIREITO = "ParDir"
-    COMENTARIO = "Coment"
-    ERROR = "Error"
-    EOF = "EOF"
-
-class ErroSintatico(Exception):
-    def __init__(self, mensagem, posicao=None):
-        self.mensagem = mensagem
-        self.posicao = posicao
-        super().__init__(self.mensagem)
-
-class Token:
-    def __init__(self, tipo: TipoToken, lexema, posicao):
-        self.tipo = tipo
-        self.lexema = lexema
-        self.posicao = posicao
-
-    def __repr__(self):
-        return f"<{self.tipo.value}, '{self.lexema}', {self.posicao}>" 
-
-
-def tipo_token(strings):
-    if strings.isdigit():
-        return TipoToken.NUMERO
-    elif strings == "+":
-        return TipoToken.SOMA
-    elif strings == "-":    
-        return TipoToken.SUBTRACAO
-    elif strings == "*":
-        return TipoToken.MULTIPLICACAO
-    elif strings == "/":
-        return TipoToken.DIVISAO
-    elif strings == "(":
-        return TipoToken.PARENTESE_ESQUERDO
-    elif strings == ")":
-        return TipoToken.PARENTESE_DIREITO
-    elif strings == " ":
-        return "WHITESPACE"
-    elif strings.startswith("#"):
-        return TipoToken.COMENTARIO
-    else:
-        return TipoToken.ERROR
-
-
-def scan_tokens(conteudo):
-    tokens = []
-    pos = 0
-    
-    while pos < len(conteudo):
-        lexema = conteudo[pos]
-        posicao = pos
-        
-        if conteudo[pos].isdigit():
-            for p in range(pos+1, len(conteudo)):
-                if conteudo[p].isdigit():
-                    lexema += conteudo[p]
-                else:
-                    pos = p - 1
-                    break
-        elif conteudo[pos] == "#":
-            p = pos+1
-            while p < len(conteudo) and conteudo[p] != "\n":
-                lexema += conteudo[p]
-                p += 1
-            pos = p - 1
-        
-        tipo = tipo_token(lexema)
-        
-        if tipo == "WHITESPACE":
-            pos += 1
-            continue
-        
-        token = Token(tipo, lexema, posicao)
-        tokens.append(token)
+def exp_any(tokens, pos):
+    esq, pos = exp_all(tokens, pos)
+    while pos < len(tokens) and tokens[pos].tipo == TipoToken.ANY:
+        tok = tokens[pos]
         pos += 1
-    
-    # token EOF para parsing
-    if tokens:
-        eof_pos = tokens[-1].posicao + len(tokens[-1].lexema)
-    else:
-        eof_pos = 0
-    tokens.append(Token(TipoToken.EOF, '', eof_pos))
-    
-    return tokens
+        dir, pos = exp_all(tokens, pos)
+        esq = OpBin(tok.tipo, esq, dir)
+    return esq, pos
 
-def olharProxToken(tokens, pos):
-    if pos + 1 < len(tokens):
-        return tokens[pos+1]
-    return None
+def exp_all(tokens, pos):
+    esq, pos = exp_c(tokens, pos)
+    while pos < len(tokens) and tokens[pos].tipo == TipoToken.ALL:
+        tok = tokens[pos]
+        pos += 1
+        dir, pos = exp_c(tokens, pos)
+        esq = OpBin(tok.tipo, esq, dir)
+    return esq, pos
 
-def find_errors(tokens):
-    """léxicos"""
-    erros = [token for token in tokens if token.tipo == TipoToken.ERROR]
-    
-    if erros:
-        print("Erros léxicos encontrados:")
-        for erro in erros:
-            print(f"Erro léxico na posição {erro.posicao}: '{erro.lexema}'")
-        return True
-    
-    return False
-
-def validar_parenteses(tokens):
-    contador = 0
-    posicoes_abertura = []
-    
-    for token in tokens:
-        if token.tipo == TipoToken.PARENTESE_ESQUERDO:
-            contador += 1
-            posicoes_abertura.append(token.posicao)
-        elif token.tipo == TipoToken.PARENTESE_DIREITO:
-            contador -= 1
-            if contador < 0:
-                raise ErroSintatico(
-                    f"Parêntese direito sem correspondente na posição {token.posicao}",
-                    token.posicao
-                )
-    
-    if contador > 0:
-        raise ErroSintatico(
-            f"Parêntese esquerdo sem fechamento na posição {posicoes_abertura[-1]}",
-            posicoes_abertura[-1]
-        )
-    
-    return True
-
-def analisa_operador(tokens, pos):
-    if pos >= len(tokens):
-        raise ErroSintatico(
-            "Esperado operador, mas fim da entrada alcançado",
-            tokens[-1].posicao if tokens else 0
-        )
-    
-    token = tokens[pos]
-    
-    if token.tipo in [TipoToken.SOMA, TipoToken.SUBTRACAO, 
-                      TipoToken.MULTIPLICACAO, TipoToken.DIVISAO]:
-        return (token.tipo, pos)
-    else:
-        raise ErroSintatico(
-            f"Esperado operador (+, -, *, /), mas encontrado '{token.lexema}' na posição {token.posicao}",
-            token.posicao
-        )
-
-class Exp:
-    pass
-
-class Const(Exp): 
-    def __init__(self, valor):
-        self.valor = valor
-
-    def avaliar(self):
-        return int(self.valor)    
-    def __repr__(self):
-        return self.valor
-
-class OpBin(Exp): 
-    def __init__(self, operador, esquerda: Const, direita: Const):
-        self.operador = operador
-        self.esquerda = esquerda
-        self.direita = direita
-
-    def avaliar(self):
-        esq = self.esquerda.avaliar()
-        dir = self.direita.avaliar()
-
-        if self.operador == TipoToken.SOMA:
-            return esq + dir
-        elif self.operador == TipoToken.SUBTRACAO:
-            return esq - dir
-        elif self.operador == TipoToken.MULTIPLICACAO:
-            return esq * dir
-        elif self.operador == TipoToken.DIVISAO:
-            if dir == 0:
-                raise ZeroDivisionError("Divisão por zero")
-            return esq // dir
-        else:
-            raise ValueError(f"Operador inválido: {self.operador}")
-
-    def __repr__(self):
-        return f"OpBin({self.esquerda}, {self.operador.value}, {self.direita})"
-
-def analisa_parenteses(tokens, pos, operador, op_esquerdo, op_direito):
-    if pos >= len(tokens):
-        raise ErroSintatico(
-            "Esperado parêntese direito ')' mas fim da entrada alcançado",
-            tokens[analisa_exp-1].posicao if tokens else 0
-        )
-    
-    token = tokens[pos]
-    
-    if token.tipo == TipoToken.PARENTESE_DIREITO:
-        return OpBin(operador, op_esquerdo, op_direito), pos
-    elif token.tipo == TipoToken.EOF:
-        raise ErroSintatico(
-            "Esperado parêntese direito ')' mas fim da entrada alcançado",
-            token.posicao
-        )
-    else:
-        raise ErroSintatico(
-            f"Esperado parêntese direito ')' mas encontrado '{token.lexema}' na posição {token.posicao}",
-            token.posicao
-        )
-
-def analisa_exp(tokens, pos):
-    if pos >= len(tokens):
-        raise ErroSintatico(
-            "Esperado expressão, mas fim da entrada alcançado",
-            tokens[-1].posicao if tokens else 0
-        )
-    
-    token = tokens[pos]
-    
-    if token.tipo == TipoToken.NUMERO:
-        return Const(token.lexema), pos
-    
-    elif token.tipo == TipoToken.PARENTESE_ESQUERDO:
-        # Analisa operando esquerdo
-        op_esquerdo, pos = analisa_exp(tokens, pos + 1)
-        
-        operador, pos = analisa_operador(tokens, pos + 1)
-        
-        # Analisa operando direito
-        op_direito, pos = analisa_exp(tokens, pos + 1)
-        
-        # Valida fechamento do parêntese
-        return analisa_parenteses(tokens, pos + 1, operador, op_esquerdo, op_direito)
-    
-    elif token.tipo == TipoToken.PARENTESE_DIREITO:
-        raise ErroSintatico(
-            f"Parêntese direito inesperado na posição {token.posicao}",
-            token.posicao
-        )
-    elif token.tipo in [TipoToken.SOMA, TipoToken.SUBTRACAO, 
-                        TipoToken.MULTIPLICACAO, TipoToken.DIVISAO]:
-        raise ErroSintatico(
-            f"Operador '{token.lexema}' inesperado na posição {token.posicao}. Expressão deve começar com número ou parêntese esquerdo",
-            token.posicao
-        )
-    elif token.tipo == TipoToken.COMENTARIO:
-        raise ErroSintatico(
-            f"Comentário inesperado na posição {token.posicao}",
-            token.posicao
-        )
-    elif token.tipo == TipoToken.EOF:
-        raise ErroSintatico(
-            "Expressão vazia ou incompleta",
-            token.posicao
-        )
-    else:
-        raise ErroSintatico(
-            f"Token inválido '{token.lexema}' na posição {token.posicao}",
-            token.posicao
-        )
-   
-def read_tree(exp: Exp, indent=0, prefix="", is_last=True): #Lê a arvore de forma estruturada [ gpt :D ]
-    """Retorna representação em string da árvore sintática de forma hierárquica"""
-    # Mapeamento de operadores para símbolos
-    ops = {
-        TipoToken.SOMA: '+',
-        TipoToken.SUBTRACAO: '-',
-        TipoToken.MULTIPLICACAO: '*',
-        TipoToken.DIVISAO: '/'
-    }
-    
-    resultado = []
-    
-    if isinstance(exp, Const):
-        # Nó folha (constante)
-        connector = "└── " if is_last else "├── "
-        resultado.append(f"{prefix}{connector}{exp.valor}")
-    elif isinstance(exp, OpBin):
-        # Nó operador
-        op_symbol = ops.get(exp.operador, '?')
-        connector = "└── " if is_last else "├── "
-        resultado.append(f"{prefix}{connector}{op_symbol}")
-        
-        # Preparar prefixo para os filhos
-        extension = "    " if is_last else "│   "
-        new_prefix = prefix + extension
-        
-        # Processar filho esquerdo
-        if isinstance(exp.esquerda, Const):
-            resultado.append(f"{new_prefix}├── {exp.esquerda.valor}")
-        else:
-            resultado.append(read_tree(exp.esquerda, indent + 1, new_prefix, False))
-        
-        # Processar filho direito
-        if isinstance(exp.direita, Const):
-            resultado.append(f"{new_prefix}└── {exp.direita.valor}")
-        else:
-            resultado.append(read_tree(exp.direita, indent + 1, new_prefix, True))
-    else:
-        raise ValueError(f"Expressão inválida: {exp}")
-    
-    return "\n".join(resultado)
-
-def translator(exp: Exp) -> str:
-    """Gera código em Python a partir da árvore sintática"""
-    answer = ""
-    if isinstance(exp, Const):
-        answer = f"mov ${exp.valor}, %rax\n"
-    else:
-        answer += translator(exp.esquerda)
-        answer += "push %rax\n"
-        answer += translator(exp.direita)
-        answer += f"mov %rax, %rbx\npop %rax\n"
-        operator = exp.operador
-        if operator == TipoToken.SOMA:
-            answer += f"add %rbx, %rax\n"
-        elif operator == TipoToken.SUBTRACAO:
-            answer += f"sub %rbx, %rax\n"
-        elif operator == TipoToken.MULTIPLICACAO:
-            answer += f"imul %rbx, %rax\n"
-        elif operator == TipoToken.DIVISAO:
-            answer += "cqo\n"
-            answer += "idiv %rbx\n"
-    return answer
+def exp_c(tokens, pos):
+    esq, pos = exp_a(tokens, pos)
+    while pos < len(tokens) and tokens[pos].tipo in [TipoToken.MENOR_QUE, TipoToken.MAIOR_QUE, TipoToken.IGUAL_A]:
+        tok = tokens[pos]
+        pos += 1
+        dir, pos = exp_a(tokens, pos)
+        esq = OpBin(tok.tipo, esq, dir)
+    return esq, pos
 
 def exp_a(tokens: List[Token], pos: int):
     esq, pos = exp_m(tokens, pos)
-    tok = olharProxToken(tokens, pos)
-    while tok and tok.tipo in [TipoToken.SOMA, TipoToken.SUBTRACAO]:
-        pos = pos + 1
-        dir, pos = exp_m(tokens, pos+1)
-        if tok.tipo == TipoToken.SOMA:
-            esq = OpBin(TipoToken.SOMA, esq, dir)
-        else:
-            esq = OpBin(TipoToken.SUBTRACAO, esq, dir)
-        tok = olharProxToken(tokens, pos)
-
+    while pos < len(tokens) and tokens[pos].tipo in [TipoToken.SOMA, TipoToken.SUBTRACAO]:
+        tok = tokens[pos]
+        pos += 1
+        dir, pos = exp_m(tokens, pos)
+        esq = OpBin(tok.tipo, esq, dir)
     return esq, pos
 
 def exp_m(tokens: List[Token], pos: int):
-    esq, pos = prim(tokens, pos)
-    tok = olharProxToken(tokens, pos)
-    while tok and tok.tipo in [TipoToken.MULTIPLICACAO, TipoToken.DIVISAO]:
-        pos = pos + 1
-        dir, pos = prim(tokens, pos+1)
-        if tok.tipo == TipoToken.MULTIPLICACAO:
-            esq = OpBin(TipoToken.MULTIPLICACAO, esq, dir)
-        else:
-            esq = OpBin(TipoToken.DIVISAO, esq, dir)
-        tok = olharProxToken(tokens, pos)
+    esq, pos = exp_exp(tokens, pos)
+    while pos < len(tokens) and tokens[pos].tipo in [TipoToken.MULTIPLICACAO, TipoToken.DIVISAO, TipoToken.RESTO]:
+        tok = tokens[pos]
+        pos += 1
+        dir, pos = exp_exp(tokens, pos)
+        esq = OpBin(tok.tipo, esq, dir)
     return esq, pos
 
+def exp_exp(tokens: List[Token], pos: int):
+    esq, pos = prim(tokens, pos)
+    if pos < len(tokens) and tokens[pos].tipo == TipoToken.EXPONENCIACAO:
+        tok = tokens[pos]
+        pos += 1
+        dir, pos = exp_exp(tokens, pos)
+        esq = OpBin(tok.tipo, esq, dir)
+    return esq, pos
+
+def params_chamada(tokens: List[Token], pos: int):
+    args = []
+    while tokens[pos].tipo not in (TipoToken.PARENTESE_DIREITO, TipoToken.EOF):
+        exp, pos = exp_any(tokens, pos)
+        args.append(exp)
+        if tokens[pos].tipo == TipoToken.VIRGULA:
+            pos += 1
+    return args, pos
+
+def chamada_funcao(tokens: List[Token], pos: int):
+    nome = tokens[pos].lexema
+    pos += 2  # consome nome e '('
+    args, pos = params_chamada(tokens, pos)
+    if tokens[pos].tipo != TipoToken.PARENTESE_DIREITO:
+        raise ErroSintatico("Esperado ')' após argumentos", tokens[pos].posicao)
+    return ChamadaFuncao(nome, args), pos + 1
+
 def prim(tokens: List[Token], pos: int):
-    if tokens[pos].tipo == TipoToken.NUMERO:
-        exp = Const(tokens[pos].lexema)
-    elif tokens[pos].tipo == TipoToken.PARENTESE_ESQUERDO:
-        exp, pos = exp_a(tokens, pos+1)
-        # Consume the closing parenthesis
-        if pos + 1 < len(tokens) and tokens[pos + 1].tipo == TipoToken.PARENTESE_DIREITO:
-            pos = pos + 1
-        else:
-            raise ErroSintatico(
-                f"Esperado parêntese direito ')' após expressão",
-                tokens[pos + 1].posicao if pos + 1 < len(tokens) else tokens[pos].posicao
-            )
+    if pos >= len(tokens):
+        raise ErroSintatico("Fim inesperado da entrada", tokens[-1].posicao)
+
+    tok = tokens[pos]
+    if tok.tipo == TipoToken.NUMERO:
+        return Const(tok.lexema), pos + 1
+    elif tok.tipo == TipoToken.TRUE:
+        return Booleano(True), pos + 1
+    elif tok.tipo == TipoToken.FALSE:
+        return Booleano(False), pos + 1
+    elif tok.tipo == TipoToken.NOT:
+        exp, pos = prim(tokens, pos + 1)
+        return OpUnario(TipoToken.NOT, exp), pos
+    elif tok.tipo == TipoToken.IDENTIFIER:
+        if pos + 1 < len(tokens) and tokens[pos + 1].tipo == TipoToken.PARENTESE_ESQUERDO:
+            return chamada_funcao(tokens, pos)
+        return Identificador(tok.lexema), pos + 1
+    elif tok.tipo == TipoToken.PARENTESE_ESQUERDO:
+        exp, pos = exp_any(tokens, pos + 1)
+        if pos < len(tokens) and tokens[pos].tipo == TipoToken.PARENTESE_DIREITO:
+            return exp, pos + 1
+        raise ErroSintatico("Esperado parêntese direito ')'", tokens[pos].posicao if pos < len(tokens) else 0)
+    else:
+        raise ErroSintatico(f"Token inesperado '{tok.lexema}'", tok.posicao)
+
+def le_tipo(tokens: List[Token], pos: int):
+    if tokens[pos].tipo in (TipoToken.TIPO_INT, TipoToken.TIPO_BOOL):
+        return tokens[pos].lexema, pos + 1
+    raise ErroSintatico("Esperado um tipo ('int' ou 'bool')", tokens[pos].posicao)
+
+def vardecl(tokens: List[Token], pos: int):
+    pos += 1  # consome 'var'
+    if tokens[pos].tipo != TipoToken.IDENTIFIER:
+        raise ErroSintatico("Esperado identificador após 'var'", tokens[pos].posicao)
+    nome = tokens[pos].lexema
+    pos += 1
     
-    return exp, pos
+    if tokens[pos].tipo != TipoToken.DOIS_PONTOS:
+        raise ErroSintatico("Esperado ':' após nome da variável para tipagem", tokens[pos].posicao)
+    pos += 1
+    tipo_var, pos = le_tipo(tokens, pos)
+
+    if tokens[pos].tipo != TipoToken.EQUAL:
+        raise ErroSintatico("Esperado '=' na declaração de variável", tokens[pos].posicao)
+    exp, pos = exp_any(tokens, pos + 1)
+    if tokens[pos].tipo != TipoToken.SEMICOLON:
+        raise ErroSintatico("Esperado ';' após declaração de variável", tokens[pos].posicao)
+    return Declaracao(nome, tipo_var, exp), pos + 1
+
+def arglist(tokens: List[Token], pos: int):
+    params = []
+    while tokens[pos].tipo not in (TipoToken.PARENTESE_DIREITO, TipoToken.EOF):
+        if tokens[pos].tipo != TipoToken.IDENTIFIER:
+            raise ErroSintatico("Esperado identificador na lista de parâmetros", tokens[pos].posicao)
+        nome_param = tokens[pos].lexema
+        pos += 1
+        if tokens[pos].tipo != TipoToken.DOIS_PONTOS:
+            raise ErroSintatico("Esperado ':' para tipagem do parâmetro", tokens[pos].posicao)
+        pos += 1
+        tipo_param, pos = le_tipo(tokens, pos)
+        
+        params.append((nome_param, tipo_param))
+        if tokens[pos].tipo == TipoToken.VIRGULA:
+            pos += 1
+    return params, pos
+
+def fundecl(tokens: List[Token], pos: int):
+    pos += 1  # consome 'fun'
+    if tokens[pos].tipo != TipoToken.IDENTIFIER:
+        raise ErroSintatico("Esperado nome da função", tokens[pos].posicao)
+    nome = tokens[pos].lexema
+    pos += 1
+    if tokens[pos].tipo != TipoToken.PARENTESE_ESQUERDO:
+        raise ErroSintatico("Esperado '(' após nome da função", tokens[pos].posicao)
+    pos += 1  # consome '('
+    params, pos = arglist(tokens, pos)
+    if tokens[pos].tipo != TipoToken.PARENTESE_DIREITO:
+        raise ErroSintatico("Esperado ')' após parâmetros", tokens[pos].posicao)
+    pos += 1  # consome ')'
+
+    if tokens[pos].tipo != TipoToken.SETA:
+        raise ErroSintatico("Esperado '->' para tipo de retorno da função", tokens[pos].posicao)
+    pos += 1
+    tipo_retorno, pos = le_tipo(tokens, pos)
+
+    if tokens[pos].tipo != TipoToken.CHAVES_ESQUERDO:
+        raise ErroSintatico("Esperado '{' no corpo da função", tokens[pos].posicao)
+    pos += 1  # consome '{'
+    
+    local_vars = []
+    while tokens[pos].tipo == TipoToken.VAR:
+        vd, pos = vardecl(tokens, pos)
+        local_vars.append(vd)
+    
+    cmds, pos = lista_cmds(tokens, pos)
+    
+    if tokens[pos].tipo != TipoToken.CHAVES_DIREITO:
+        raise ErroSintatico("Esperado '}' para fechar função", tokens[pos].posicao)
+    return DeclaracaoFuncao(nome, params, tipo_retorno, local_vars, cmds), pos + 1
+
+def decl(tokens: List[Token], pos: int):
+    if tokens[pos].tipo == TipoToken.VAR:
+        return vardecl(tokens, pos)
+    elif tokens[pos].tipo == TipoToken.FUN:
+        return fundecl(tokens, pos)
+    raise ErroSintatico("Esperado 'var' ou 'fun'", tokens[pos].posicao)
+
+def cmd_atrib(tokens, pos):
+    nome = tokens[pos].lexema
+    pos += 1  # consome identificador
+    if tokens[pos].tipo != TipoToken.EQUAL:
+        raise ErroSintatico("Esperado '=' na atribuição", tokens[pos].posicao)
+    exp_val, pos = exp_any(tokens, pos + 1)
+    if tokens[pos].tipo != TipoToken.SEMICOLON:
+        raise ErroSintatico("Esperado ';' após atribuição", tokens[pos].posicao)
+    return CmdAtrib(nome, exp_val), pos + 1
+
+def cmd_return(tokens, pos):
+    pos += 1 # consome 'return'
+    exp, pos = exp_any(tokens, pos)
+    if tokens[pos].tipo != TipoToken.SEMICOLON:
+        raise ErroSintatico("Esperado ';' após return", tokens[pos].posicao)
+    pos += 1
+    return CmdReturn(exp), pos
+
+def lista_cmds(tokens, pos):
+  cmds = []
+  while tokens[pos].tipo in [TipoToken.IF, TipoToken.WHILE, TipoToken.IDENTIFIER, TipoToken.RETURN]:
+      c, pos = cmd(tokens, pos)
+      cmds.append(c)
+  return cmds, pos
+
+def cmd(tokens, pos):
+    if tokens[pos].tipo == TipoToken.IF:
+        return cmd_if(tokens, pos)
+    elif tokens[pos].tipo == TipoToken.WHILE:
+        return cmd_while(tokens, pos)
+    elif tokens[pos].tipo == TipoToken.IDENTIFIER:
+        return cmd_atrib(tokens, pos)
+    elif tokens[pos].tipo == TipoToken.RETURN:
+        return cmd_return(tokens, pos)
+    else:
+        raise ErroSintatico(f"Comando esperado", tokens[pos].posicao)
+
+def cmd_if(tokens, pos):
+    pos += 1  # consome 'if'
+    cond, pos = exp_any(tokens, pos)
+    pos += 1  # consome '{'
+    cmds_true, pos = lista_cmds(tokens, pos)
+    pos += 1  # consome '}'
+    pos += 1  # consome 'else'
+    pos += 1  # consome '{'
+    cmds_false, pos = lista_cmds(tokens, pos)
+    pos += 1  # consome '}'
+    return CmdIf(cond, cmds_true, cmds_false), pos
+
+def cmd_while(tokens, pos):
+    pos += 1  # consome 'while'
+    cond, pos = exp_any(tokens, pos)
+    pos += 1  # consome '{'
+    cmds, pos = lista_cmds(tokens, pos)
+    pos += 1  # consome '}'
+    return CmdWhile(cond, cmds), pos
+
+def programa(tokens: List[Token]):
+    pos = 0
+    declaracoes = []
+
+    while pos < len(tokens) and tokens[pos].tipo in (TipoToken.VAR, TipoToken.FUN):
+        d, pos = decl(tokens, pos)
+        declaracoes.append(d)
+
+    if tokens[pos].tipo != TipoToken.MAIN:
+        raise ErroSintatico("Esperado 'main'", tokens[pos].posicao)
+    pos += 1  # consome 'main'
+
+    if tokens[pos].tipo != TipoToken.CHAVES_ESQUERDO:
+        raise ErroSintatico("Esperado '{' após 'main'", tokens[pos].posicao)
+    pos += 1  # consome '{'
+
+    cmds, pos = lista_cmds(tokens, pos)
+
+    if tokens[pos].tipo != TipoToken.CHAVES_DIREITO:
+        raise ErroSintatico("Esperado '}' para fechar o corpo do main", tokens[pos].posicao)
+    pos += 1  # consome '}'
+
+    return Programa(declaracoes, cmds), pos
+    
+def resolve_var(nome: str, tabela_local: dict, tabela_global: dict):
+    return tabela_local.get(nome) or tabela_global.get(nome)
+
+def inferir_tipo(exp: Exp, tabela_local: dict, tabela_global: dict) -> str:
+    if isinstance(exp, Const):
+        return 'int'
+    elif isinstance(exp, Booleano):
+        return 'bool'
+    elif isinstance(exp, Identificador):
+        entrada = resolve_var(exp.nome, tabela_local, tabela_global)
+        if entrada is None:
+            raise ErroSemantico(f"Variável '{exp.nome}' não declarada.")
+        if entrada[0] != 'var':
+            raise ErroSemantico(f"'{exp.nome}' é função e não variável.")
+        return entrada[1]  # retorna o tipo da variável
+    elif isinstance(exp, OpUnario):
+        tipo_exp = inferir_tipo(exp.expressao, tabela_local, tabela_global)
+        if exp.operador == TipoToken.NOT:
+            if tipo_exp != 'bool':
+                raise ErroSemantico("Operador 'not' requer booleano.")
+            return 'bool'
+    elif isinstance(exp, OpBin):
+        tipo_esq = inferir_tipo(exp.esquerda, tabela_local, tabela_global)
+        tipo_dir = inferir_tipo(exp.direita, tabela_local, tabela_global)
+        
+        aritm_ops = [TipoToken.SOMA, TipoToken.SUBTRACAO, TipoToken.MULTIPLICACAO, TipoToken.DIVISAO, TipoToken.RESTO, TipoToken.EXPONENCIACAO]
+        cmp_ops = [TipoToken.MAIOR_QUE, TipoToken.MENOR_QUE, TipoToken.IGUAL_A]
+        log_ops = [TipoToken.ALL, TipoToken.ANY]
+
+        if exp.operador in aritm_ops:
+            if tipo_esq != 'int' or tipo_dir != 'int':
+                raise ErroSemantico(f"Operador aritmético requer inteiros.")
+            return 'int'
+        elif exp.operador in log_ops:
+            if tipo_esq != 'bool' or tipo_dir != 'bool':
+                raise ErroSemantico(f"Operador lógico requer booleanos.")
+            return 'bool'
+        elif exp.operador in cmp_ops:
+            if tipo_esq != tipo_dir:
+                raise ErroSemantico(f"Comparação requer tipos iguais.")
+            return 'bool'
+    elif isinstance(exp, ChamadaFuncao):
+        entrada = tabela_global.get(exp.nome)
+        if entrada is None:
+            raise ErroSemantico(f"Função '{exp.nome}' não declarada.")
+        if entrada[0] != 'fun':
+            raise ErroSemantico(f"'{exp.nome}' não é função.")
+        assinatura_params = entrada[1]
+        tipo_retorno = entrada[2]
+        if len(exp.args) != len(assinatura_params):
+            raise ErroSemantico(f"A função '{exp.nome}' espera {len(assinatura_params)} args.")
+        for arg, (nome_param, tipo_param) in zip(exp.args, assinatura_params):
+            tipo_arg = inferir_tipo(arg, tabela_local, tabela_global)
+            if tipo_arg != tipo_param:
+                raise ErroSemantico(f"Argumento '{nome_param}' espera {tipo_param}, obteve {tipo_arg}.")
+        return tipo_retorno
+
+def verifica_cmd(cmd, tabela_local: dict, tabela_global: dict, tipo_retorno_esperado: str):
+    if isinstance(cmd, CmdAtrib):
+        tipo_exp = inferir_tipo(cmd.exp, tabela_local, tabela_global)
+        entrada = resolve_var(cmd.nome, tabela_local, tabela_global)
+        if entrada is None:
+            raise ErroSemantico(f"Variável '{cmd.nome}' não declarada.")
+        if entrada[0] != 'var':
+            raise ErroSemantico(f"'{cmd.nome}' não é variável.")
+        if tipo_exp != entrada[1]:
+            raise ErroSemantico(f"Atribuição a '{cmd.nome}' espera '{entrada[1]}', obteve '{tipo_exp}'.")
+    elif isinstance(cmd, CmdIf):
+        tipo_cond = inferir_tipo(cmd.condicao, tabela_local, tabela_global)
+        if tipo_cond != 'bool':
+            raise ErroSemantico("Condição do 'if' deve ser booleana.")
+        for c in cmd.corpo_then:
+            verifica_cmd(c, tabela_local, tabela_global, tipo_retorno_esperado)
+        for c in cmd.corpo_else:
+            verifica_cmd(c, tabela_local, tabela_global, tipo_retorno_esperado)
+    elif isinstance(cmd, CmdWhile):
+        tipo_cond = inferir_tipo(cmd.condicao, tabela_local, tabela_global)
+        if tipo_cond != 'bool':
+            raise ErroSemantico("Condição do 'while' deve ser booleana.")
+        for c in cmd.corpo:
+            verifica_cmd(c, tabela_local, tabela_global, tipo_retorno_esperado)
+    elif isinstance(cmd, CmdReturn):
+        tipo_ret = inferir_tipo(cmd.exp, tabela_local, tabela_global)
+        if tipo_ret != tipo_retorno_esperado:
+            raise ErroSemantico(f"Retorno esperado '{tipo_retorno_esperado}', obteve '{tipo_ret}'.")
+
+def analise_semantica(prog: Programa):
+    tabela_global = {}
+
+    for d in prog.declaracoes:
+        if isinstance(d, Declaracao):
+            tipo_exp = inferir_tipo(d.exp, {}, tabela_global)
+            if tipo_exp != d.tipo_var:
+                raise ErroSemantico(f"Declaração '{d.nome}' espera '{d.tipo_var}', teve '{tipo_exp}'.")
+            tabela_global[d.nome] = ('var', d.tipo_var)
+        elif isinstance(d, DeclaracaoFuncao):
+            tabela_local = {p[0]: ('var', p[1]) for p in d.params}
+            tabela_global[d.nome] = ('fun', d.params, d.tipo_retorno)
+            for vd in d.vardecls:
+                tipo_exp = inferir_tipo(vd.exp, tabela_local, tabela_global)
+                if tipo_exp != vd.tipo_var:
+                    raise ErroSemantico(f"Variável local '{vd.nome}' espera '{vd.tipo_var}', obteve '{tipo_exp}'.")
+                tabela_local[vd.nome] = ('var', vd.tipo_var)
+            for c in d.comandos:
+                verifica_cmd(c, tabela_local, tabela_global, d.tipo_retorno)
+
+    for c in prog.comandos:
+        # main by default is int in this logic if we want, or whatever. We don't have return in main by default unless user types.
+        # But wait, wait! main can have `return`? Yes. Main usually exits or we pop. Let's assume 'int' for main return.
+        verifica_cmd(c, {}, tabela_global, 'int')

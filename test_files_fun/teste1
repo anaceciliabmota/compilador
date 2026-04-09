@@ -1,0 +1,23 @@
+var a = 9;
+var b = 2;
+var c = 1; 
+
+fun abs(x) {
+ var y = 0;
+ if x < 0 {
+ y = 0 - x;
+ } else {
+ y = x;
+ }
+ return y;
+}
+
+main {
+    if a > 10 {
+       c = abs(a);
+    }
+    else {
+       c = abs(b);
+    }
+    return c;
+}

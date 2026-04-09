@@ -1,0 +1,14 @@
+# resultado é 27
+n = 1;
+soma = 0;
+{
+ while n < 6 {
+  if n < 3 {
+   soma = soma + n;
+  } else {
+   soma = soma + 2*n;
+  }
+  n = n + 1;
+ }
+ return soma;
+}

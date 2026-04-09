@@ -1,0 +1,10 @@
+x = 2;
+y = 2;
+{
+if x > y {
+    x =  x + y;
+} else{
+    x =  x / y;
+}
+return x;
+}
